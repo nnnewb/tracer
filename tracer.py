@@ -5,20 +5,20 @@ Based on better_exceptions.formatter
 
 from __future__ import absolute_import
 
-import pdb
-import sys
-
-import six
-import socketserver
-
+import logging
 import ast
 import inspect
 import os
+import pdb
+import sys
 import traceback
 from locale import getpreferredencoding
 
+import six
+
 PIPE_CHAR = u'\u2502'
 CAP_CHAR = u'\u2514'
+logger = logging.getLogger(__name__)
 
 try:
     PIPE_CHAR = six.ensure_str(PIPE_CHAR, encoding=getpreferredencoding())
@@ -62,34 +62,58 @@ class TracePoint(object):
 
 
 class Tracer(object):
-    do_at_line = []
-    do_at_call = []
-    do_at_return = []
+
+    def __init__(self):
+        self.executed = []
+        self.trace_points = []
+
+    def has_tracing(self, tp, frame, event, arg):
+        if isinstance(tp['cond'], (six.text_type, six.string_types)):
+            def cond(f, e, a):
+                return e == tp['cond']
+        else:
+            cond = tp['cond']
+
+        return tp.get('enabled', True) and cond(frame, event, arg)
+
+    def do_tracing(self, tp, frame, event, arg):
+        if 'callback' in tp and tp['callback'] and callable(tp['callback']):
+            tp['callback'](frame, event, arg)
+        else:
+            logger.warning('invalid trace point callback: {}'.format(tp['callback']))
 
     def dispatch(self, frame, event, arg):
-        if event == 'call':
-            self.at_call(frame, event, arg)
-        elif event == 'line':
-            self.at_line(frame, event, arg)
-        elif event == 'return':
-            self.at_return(frame, event, arg)
-        else:
-            return self.dispatch
+        for tp in self.trace_points:
+            if self.has_tracing(tp, frame, event, arg):
+                self.do_tracing(tp, frame, event, arg)
+                self.executed.append(tp)
 
-    def at_line(self, frame, event, arg):
-        for tp in self.do_at_line:
-            if tp.cond(frame, event, arg):
-                tp(frame, event, arg)
+        for tp in self.executed:
+            if 'once' in tp and tp['once']:
+                try:
+                    idx = self.trace_points.index(tp)
+                    removed = self.trace_points.pop(idx)
+                    logger.debug('remove trace point due to once executed: {}'.format(removed))
+                except ValueError:
+                    logger.warning('No executed trace point {} found in trace_points'.format(tp))
 
-    def at_call(self, frame, event, arg):
-        for tp in self.do_at_call:
-            if tp.cond(frame, event, arg):
-                tp(frame, event, arg)
+        if len(self.trace_points) == 0:
+            logger.debug('No trace points exists, execution tracking disabled.')
+            return None
 
-    def at_return(self, frame, event, arg):
-        for tp in self.do_at_return:
-            if tp.cond(frame, event, arg):
-                tp(frame, event, arg)
+        return self.dispatch
+
+    def set_trace(self, func, once=False):
+        def cond(frame, event, arg):
+            if event == 'call':
+                return frame.f_code.co_name == func
+
+        self.trace_points.append({
+            'cond': cond,
+            'callback': lambda frame, event, arg: print_stack(inspect.getouterframes(frame)[1:]),
+            'enabled': True,
+            'once': once,
+        })
 
 
 class CallStackFormatter(object):
@@ -144,8 +168,8 @@ class CallStackFormatter(object):
 
         return filename, lineno, function, source, relevant_values
 
-    def format_frame(self, tb):
-        filename, lineno, function, source, relevant_values = self.get_frame_infomation(tb)
+    def format_frame(self, frame):
+        filename, lineno, function, source, relevant_values = self.get_frame_infomation(frame)
 
         lines = [source]
         for i in reversed(range(len(relevant_values))):
@@ -188,44 +212,20 @@ class CallStackFormatter(object):
 _tracer = Tracer()
 
 
-class _TraceCall(TracePoint):
-
-    def __init__(self, fn):
-        super(_TraceCall, self).__init__()
-        self.func_name = fn
-
-    def cond(self, frame, event, arg):
-        return frame.f_code.co_name == self.func_name
-
-    def __call__(self, frame, event, arg):
-        print_stack()
+def _cond_enter_function(func):
+    return lambda frame, event, arg: frame.f_code.co_name == func
 
 
-class _DebugCall(TracePoint):
-    def __init__(self, debugger, func, once):
-        super(_DebugCall, self).__init__()
-        self.debugger = debugger
-        self.func_name = func
-        self.once = once
+def print_stack(stack):
+    formatter = CallStackFormatter()
 
-    def cond(self, frame, event, arg):
-        return frame.f_code.co_name == self.func_name
+    if not stack:
+        stack = inspect.stack()[1:]
 
-    def __call__(self, *args, **kwargs):
-        self.debugger.set_trace()
-
-
-def print_stack():
-    print(CallStackFormatter().format_stack())
+    print(formatter.format_stack(stack))
 
 
 def trace_call(func_name):
     global _tracer
-    _tracer.do_at_call.append(_TraceCall(func_name))
-    sys.settrace(_tracer.dispatch)
-
-
-def debug_call(func, once):
-    global _tracer
-    _tracer.do_at_call.append(_DebugCall(pdb, func, once))
+    _tracer.set_trace(func_name)
     sys.settrace(_tracer.dispatch)

@@ -7,21 +7,13 @@ import tracer
 coloredlogs.install(level=logging.DEBUG)
 
 
-def trap_in(a):
-    print(a)
+def function(a):
     b = a + 1
-    print(b)
-
-
-def test_debug():
-    tracer.debug_call('trap_in', False)
-    a = 10
-
-    trap_in(a)
+    return b
 
 
 def test_trace_call_stack():
-    tracer.trace_call('trap_in')
+    tracer.trace_call('function')
     a = 10
 
-    trap_in(a)
+    function(a)
