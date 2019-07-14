@@ -5,11 +5,10 @@ Based on better_exceptions.formatter
 
 from __future__ import absolute_import
 
-import logging
 import ast
 import inspect
+import logging
 import os
-import pdb
 import sys
 import traceback
 from locale import getpreferredencoding
