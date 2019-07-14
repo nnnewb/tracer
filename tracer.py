@@ -133,8 +133,7 @@ class CallStackFormatter(object):
             v = v[:max_length] + '...'
         return v
 
-    def get_relevant_values(self, frame, tree):
-        names = self.get_relevant_names(tree)
+    def get_relevant_values(self, frame, names):
         values = []
 
         for name in names:
@@ -151,7 +150,7 @@ class CallStackFormatter(object):
 
         return values
 
-    def get_frame_infomation(self, frame):
+    def get_frame_information(self, frame):
         filename = frame.f_code.co_filename
         lineno = frame.f_lineno
         function = frame.f_code.co_name
@@ -164,12 +163,13 @@ class CallStackFormatter(object):
         except SyntaxError:
             return filename, lineno, function, source, []
 
-        relevant_values = self.get_relevant_values(frame, tree)
+        relevant_names = self.get_relevant_names(tree)
+        relevant_values = self.get_relevant_values(frame, relevant_names)
 
         return filename, lineno, function, source, relevant_values
 
     def format_frame(self, frame):
-        filename, lineno, function, source, relevant_values = self.get_frame_infomation(frame)
+        filename, lineno, function, source, relevant_values = self.get_frame_information(frame)
 
         lines = [source]
         for i in reversed(range(len(relevant_values))):
