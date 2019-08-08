@@ -1,6 +1,5 @@
+# -*- coding=utf-8 -*-
 """ Copyright (C) 2019 weak_ptr <weak_ptr@163.com> all rights reserved.
-
-Based on better_exceptions.formatter
 """
 
 from __future__ import absolute_import

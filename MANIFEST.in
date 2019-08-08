@@ -1,0 +1,2 @@
+include README.md setup.py LICENSE tracer.py setup.py
+recursive-include docs *.png *.jpg *.md
