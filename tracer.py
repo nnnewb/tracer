@@ -215,12 +215,16 @@ def _cond_enter_function(func):
 
 
 def print_stack(stack):
-    formatter = CallStackFormatter()
+    try:
+        formatter = CallStackFormatter()
 
-    if not stack:
-        stack = inspect.stack()[1:]
+        if not stack:
+            stack = inspect.stack()[1:]
 
-    print(formatter.format_stack(stack))
+        print(formatter.format_stack(stack))
+    except Exception as e:
+        print('tracer.CallStackFormatter.format_stack failed. fallback.')
+        print(traceback.format_stack(stack))
 
 
 def trace_call(func_name):
